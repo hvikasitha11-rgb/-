@@ -2,41 +2,44 @@ const { cmd } = require('../command');
 const yts = require('yt-search');
 const ytdl = require('ytdl-core');
 
-// Temporary store for user selections
+// Temporary storage for user selections
 let userSelections = {};
 
+/**
+ * Search YouTube and show menu
+ */
 cmd({
     pattern: 'song3',
-    desc: 'Hiru X MD Song Downloader with thumbnail',
+    desc: 'Hiru X MD Song Downloader with thumbnail and direct stream',
     category: 'downloader',
     filename: __filename
 }, async (conn, mek, m, { text, from, reply }) => {
     try {
-        if (!text) return reply('❌ කරුණාකර song name එකක් type කරන්න.');
+        if (!text) return reply('❌ Please type a song name.');
 
         // Search YouTube
-        const r = await yts(text);
-        const vid = r.videos[0];
-        if (!vid) return reply('❌ කිසිම song result එකක් හමු නොවීය.');
+        const search = await yts(text);
+        const video = search.videos[0];
+        if (!video) return reply('❌ No song results found.');
 
-        // Save selection
+        // Store selection for user
         userSelections[from] = {
-            title: vid.title,
-            url: vid.url,
-            seconds: vid.seconds,
-            views: vid.views,
-            author: vid.author.name,
-            thumbnail: vid.thumbnail
+            title: video.title,
+            url: video.url,
+            seconds: video.seconds,
+            views: video.views,
+            author: video.author.name,
+            thumbnail: video.thumbnail
         };
 
-        // Build nicely formatted menu message
+        // Build menu caption
         const caption = `
 ╭─「 🎧 HIRU X MD SONG DOWNLOADER 」─╮
-│ 📌 Title : ${vid.title}
-│ ⏰ Duration : ${Math.floor(vid.seconds/60)}:${vid.seconds%60}
-│ 👤 Author : ${vid.author.name}
-│ 👀 Views : ${vid.views}
-│ 📎 URL : ${vid.url}
+│ 📌 Title : ${video.title}
+│ ⏰ Duration : ${Math.floor(video.seconds/60)}:${video.seconds % 60 < 10 ? '0'+video.seconds % 60 : video.seconds % 60}
+│ 👤 Author : ${video.author.name}
+│ 👀 Views : ${video.views}
+│ 📎 URL : ${video.url}
 ╰───────────────────────────────╯
 
 Reply with number:
@@ -45,9 +48,9 @@ Reply with number:
 3 | Voice Note 🎙️
 `;
 
-        // Send thumbnail + caption
+        // Send thumbnail + menu
         await conn.sendMessage(from, {
-            image: { url: vid.thumbnail },
+            image: { url: video.thumbnail },
             caption: caption
         }, { quoted: mek });
 
@@ -57,27 +60,38 @@ Reply with number:
     }
 });
 
-// Handle number reply
+/**
+ * Handle user's reply selection (1/2/3)
+ */
 cmd({
     pattern: '^[1-3]$',
-    desc: 'Download song after user selection',
+    desc: 'Send selected song as audio/document/voice note',
     category: 'downloader',
     filename: __filename
 }, async (conn, mek, m, { text, from, reply }) => {
     try {
         const info = userSelections[from];
-        if (!info) return reply('❌ Song selection not found. Please use the song command first.');
+        if (!info) return reply('❌ Please use the .song command first.');
 
+        // Stream audio from YouTube
         const stream = ytdl(info.url, { filter: 'audioonly' });
 
         if (text === '1') {
+            // Send as audio
             await conn.sendMessage(from, { audio: stream, mimetype: 'audio/mp4', ptt: false }, { quoted: mek });
         } else if (text === '2') {
-            await conn.sendMessage(from, { document: stream, mimetype: 'audio/mp4', fileName: `${info.title}.mp3` }, { quoted: mek });
+            // Send as document
+            await conn.sendMessage(from, {
+                document: stream,
+                mimetype: 'audio/mp4',
+                fileName: `${info.title}.mp3`
+            }, { quoted: mek });
         } else if (text === '3') {
+            // Send as voice note
             await conn.sendMessage(from, { audio: stream, mimetype: 'audio/mp4', ptt: true }, { quoted: mek });
         }
 
+        // Clear user selection
         delete userSelections[from];
 
     } catch (e) {
