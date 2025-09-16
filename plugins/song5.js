@@ -2,57 +2,43 @@ const { cmd } = require('../command');
 const yts = require('yt-search');
 const ytdl = require('ytdl-core');
 
-// Temporary storage for user selections
+// Temporary store for user selections
 let userSelections = {};
 
 /**
- * Search YouTube and show menu
+ * Step 1: Search and show top 5 results with buttons
  */
 cmd({
-    pattern: 'song3',
-    desc: 'Hiru X MD Song Downloader with thumbnail and direct stream',
+    pattern: 'song2',
+    desc: 'Hiru X MD Song Downloader with Buttons',
     category: 'downloader',
     filename: __filename
 }, async (conn, mek, m, { text, from, reply }) => {
     try {
         if (!text) return reply('❌ Please type a song name.');
 
-        // Search YouTube
         const search = await yts(text);
-        const video = search.videos[0];
-        if (!video) return reply('❌ No song results found.');
+        const videos = search.videos.slice(0, 5);
+        if (!videos.length) return reply('❌ No results found.');
 
-        // Store selection for user
-        userSelections[from] = {
-            title: video.title,
-            url: video.url,
-            seconds: video.seconds,
-            views: video.views,
-            author: video.author.name,
-            thumbnail: video.thumbnail
+        // Store user selection list
+        userSelections[from] = { videos };
+
+        // Build buttons
+        const buttons = videos.map((vid, i) => ({
+            buttonId: `select_${i}`,
+            buttonText: { displayText: `${i + 1} | ${vid.title.slice(0, 20)}...` },
+            type: 1
+        }));
+
+        const buttonMessage = {
+            image: { url: videos[0].thumbnail },
+            caption: '🎧 Select a song by clicking a button below:',
+            buttons: buttons,
+            headerType: 4
         };
 
-        // Build menu caption
-        const caption = `
-╭─「 🎧 HIRU X MD SONG DOWNLOADER 」─╮
-│ 📌 Title : ${video.title}
-│ ⏰ Duration : ${Math.floor(video.seconds/60)}:${video.seconds % 60 < 10 ? '0'+video.seconds % 60 : video.seconds % 60}
-│ 👤 Author : ${video.author.name}
-│ 👀 Views : ${video.views}
-│ 📎 URL : ${video.url}
-╰───────────────────────────────╯
-
-Reply with number:
-1 | Audio 🎧
-2 | Document 📂
-3 | Voice Note 🎙️
-`;
-
-        // Send thumbnail + menu
-        await conn.sendMessage(from, {
-            image: { url: video.thumbnail },
-            caption: caption
-        }, { quoted: mek });
+        await conn.sendMessage(from, buttonMessage, { quoted: mek });
 
     } catch (e) {
         console.log(e);
@@ -61,37 +47,70 @@ Reply with number:
 });
 
 /**
- * Handle user's reply selection (1/2/3)
+ * Step 2: Handle song selection via button
  */
 cmd({
-    pattern: '^[1-3]$',
-    desc: 'Send selected song as audio/document/voice note',
+    pattern: 'select_([0-4])',
+    desc: 'User selected song',
     category: 'downloader',
     filename: __filename
-}, async (conn, mek, m, { text, from, reply }) => {
+}, async (conn, mek, m, { match, from, reply }) => {
     try {
-        const info = userSelections[from];
-        if (!info) return reply('❌ Please use the .song command first.');
+        const index = parseInt(match[1]);
+        const data = userSelections[from];
+        if (!data?.videos || !data.videos[index]) return reply('❌ Invalid selection.');
 
-        // Stream audio from YouTube
-        const stream = ytdl(info.url, { filter: 'audioonly' });
+        const vid = data.videos[index];
+        userSelections[from] = { selected: vid };
 
-        if (text === '1') {
-            // Send as audio
+        // Show download type buttons
+        const downloadButtons = [
+            { buttonId: 'download_audio', buttonText: { displayText: 'Audio 🎧' }, type: 1 },
+            { buttonId: 'download_doc', buttonText: { displayText: 'Document 📂' }, type: 1 },
+            { buttonId: 'download_ptt', buttonText: { displayText: 'Voice Note 🎙️' }, type: 1 }
+        ];
+
+        const buttonMessage = {
+            image: { url: vid.thumbnail },
+            caption: `🎶 Selected: ${vid.title}\nChoose download type:`,
+            buttons: downloadButtons,
+            headerType: 4
+        };
+
+        await conn.sendMessage(from, buttonMessage, { quoted: mek });
+
+    } catch (e) {
+        console.log(e);
+        reply('❌ Error: ' + e);
+    }
+});
+
+/**
+ * Step 3: Handle download buttons
+ */
+cmd({
+    pattern: 'download_(audio|doc|ptt)',
+    desc: 'Download selected song',
+    category: 'downloader',
+    filename: __filename
+}, async (conn, mek, m, { match, from, reply }) => {
+    try {
+        const type = match[1]; // audio / doc / ptt
+        const data = userSelections[from];
+        if (!data?.selected) return reply('❌ Please select a song first.');
+
+        const vid = data.selected;
+        const stream = ytdl(vid.url, { filter: 'audioonly' });
+
+        if (type === 'audio') {
             await conn.sendMessage(from, { audio: stream, mimetype: 'audio/mp4', ptt: false }, { quoted: mek });
-        } else if (text === '2') {
-            // Send as document
-            await conn.sendMessage(from, {
-                document: stream,
-                mimetype: 'audio/mp4',
-                fileName: `${info.title}.mp3`
-            }, { quoted: mek });
-        } else if (text === '3') {
-            // Send as voice note
+        } else if (type === 'doc') {
+            await conn.sendMessage(from, { document: stream, mimetype: 'audio/mp4', fileName: `${vid.title}.mp3` }, { quoted: mek });
+        } else if (type === 'ptt') {
             await conn.sendMessage(from, { audio: stream, mimetype: 'audio/mp4', ptt: true }, { quoted: mek });
         }
 
-        // Clear user selection
+        // Clear selection
         delete userSelections[from];
 
     } catch (e) {
