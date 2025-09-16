@@ -2,57 +2,42 @@ const { cmd } = require('../command');
 const yts = require('yt-search');
 const ytdl = require('ytdl-core');
 
-// Temporary store for user selections
+// Temporary in-memory store
 let userSelections = {};
 
 cmd({
     pattern: 'song5',
-    desc: 'Hiru X MD Song Downloader',
+    desc: 'Search and download song from YouTube',
     category: 'downloader',
     filename: __filename
 }, async (conn, mek, m, { text, from, reply }) => {
     try {
-        if (!text) return reply('❌ YouTube link එකක් හෝ song title එකක් type කරන්න.');
+        if (!text) return reply('❌ කරුණාකර song name එකක් type කරන්න.');
 
-        // Fetch YouTube info
-        let info;
-        if (text.includes('youtube.com')) {
-            const id = text.split('v=')[1].split('&')[0];
-            const video = await ytdl.getInfo(id);
-            info = {
-                title: video.videoDetails.title,
-                url: video.videoDetails.video_url,
-                lengthSeconds: video.videoDetails.lengthSeconds,
-                author: video.videoDetails.author.name,
-                views: video.videoDetails.viewCount,
-            };
-        } else {
-            const r = await yts(text);
-            const vid = r.videos[0];
-            info = {
-                title: vid.title,
-                url: vid.url,
-                lengthSeconds: vid.seconds,
-                author: vid.author.name,
-                views: vid.views,
-            };
-        }
+        // Search YouTube
+        const r = await yts(text);
+        const vid = r.videos[0]; // first result
+        if (!vid) return reply('❌ කිසිම song result එකක් හමු නොවීය.');
 
-        userSelections[from] = info;
+        // Save user selection
+        userSelections[from] = {
+            title: vid.title,
+            url: vid.url,
+            seconds: vid.seconds,
+            views: vid.views,
+            author: vid.author.name
+        };
 
+        // Send menu
         const msg = `*🎧 HIRU X MD SONG DOWNLOADER*\n\n` +
         `*┏━━━━━━━━━━━━━━━*\n` +
-        `*┃ 📌 Title:* ${info.title}\n` +
-        `*┃ ⏰ Duration:* ${Math.floor(info.lengthSeconds/60)}:${info.lengthSeconds%60}\n` +
-        `*┃ 👤 Author:* ${info.author}\n` +
-        `*┃ 👀 Views:* ${info.views}\n` +
-        `*┃ 📎 URL:* ${info.url}\n` +
+        `*┃ 📌 Title:* ${vid.title}\n` +
+        `*┃ ⏰ Duration:* ${Math.floor(vid.seconds/60)}:${vid.seconds%60}\n` +
+        `*┃ 👤 Author:* ${vid.author.name}\n` +
+        `*┃ 👀 Views:* ${vid.views}\n` +
+        `*┃ 📎 URL:* ${vid.url}\n` +
         `*┗━━━━━━━━━━━━━━*\n\n` +
-        `Reply with number:\n` +
-        `1 | Audio 🎧\n` +
-        `2 | Document 📂\n` +
-        `3 | Voice Note 🎙️\n\n` +
-        `> © POWERED BY HIRU X MD`;
+        `Reply with number:\n1 | Audio 🎧\n2 | Document 📂\n3 | Voice Note 🎙️`;
 
         reply(msg);
 
@@ -62,16 +47,16 @@ cmd({
     }
 });
 
-// Listen for number replies
+// Handle reply numbers
 cmd({
     pattern: '^[1-3]$',
-    desc: 'Handle Hiru X MD song download reply',
+    desc: 'Download song after user selection',
     category: 'downloader',
     filename: __filename
 }, async (conn, mek, m, { text, from, reply }) => {
     try {
         const info = userSelections[from];
-        if (!info) return reply('❌ Please select a song first using the song command.');
+        if (!info) return reply('❌ Song selection not found. Use the song command first.');
 
         const stream = ytdl(info.url, { filter: 'audioonly' });
 
@@ -83,6 +68,7 @@ cmd({
             await conn.sendMessage(from, { audio: stream, mimetype: 'audio/mp4', ptt: true }, { quoted: mek });
         }
 
+        // Clear user selection
         delete userSelections[from];
 
     } catch (e) {
