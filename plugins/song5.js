@@ -2,12 +2,12 @@ const { cmd } = require('../command');
 const yts = require('yt-search');
 const ytdl = require('ytdl-core');
 
-// Temporary in-memory store
+// Temporary store for user selections
 let userSelections = {};
 
 cmd({
-    pattern: 'song5',
-    desc: 'Search and download song from YouTube',
+    pattern: 'song3',
+    desc: 'Hiru X MD Song Downloader with thumbnail',
     category: 'downloader',
     filename: __filename
 }, async (conn, mek, m, { text, from, reply }) => {
@@ -16,30 +16,40 @@ cmd({
 
         // Search YouTube
         const r = await yts(text);
-        const vid = r.videos[0]; // first result
+        const vid = r.videos[0];
         if (!vid) return reply('❌ කිසිම song result එකක් හමු නොවීය.');
 
-        // Save user selection
+        // Save selection
         userSelections[from] = {
             title: vid.title,
             url: vid.url,
             seconds: vid.seconds,
             views: vid.views,
-            author: vid.author.name
+            author: vid.author.name,
+            thumbnail: vid.thumbnail
         };
 
-        // Send menu
-        const msg = `*🎧 HIRU X MD SONG DOWNLOADER*\n\n` +
-        `*┏━━━━━━━━━━━━━━━*\n` +
-        `*┃ 📌 Title:* ${vid.title}\n` +
-        `*┃ ⏰ Duration:* ${Math.floor(vid.seconds/60)}:${vid.seconds%60}\n` +
-        `*┃ 👤 Author:* ${vid.author.name}\n` +
-        `*┃ 👀 Views:* ${vid.views}\n` +
-        `*┃ 📎 URL:* ${vid.url}\n` +
-        `*┗━━━━━━━━━━━━━━*\n\n` +
-        `Reply with number:\n1 | Audio 🎧\n2 | Document 📂\n3 | Voice Note 🎙️`;
+        // Build nicely formatted menu message
+        const caption = `
+╭─「 🎧 HIRU X MD SONG DOWNLOADER 」─╮
+│ 📌 Title : ${vid.title}
+│ ⏰ Duration : ${Math.floor(vid.seconds/60)}:${vid.seconds%60}
+│ 👤 Author : ${vid.author.name}
+│ 👀 Views : ${vid.views}
+│ 📎 URL : ${vid.url}
+╰───────────────────────────────╯
 
-        reply(msg);
+Reply with number:
+1 | Audio 🎧
+2 | Document 📂
+3 | Voice Note 🎙️
+`;
+
+        // Send thumbnail + caption
+        await conn.sendMessage(from, {
+            image: { url: vid.thumbnail },
+            caption: caption
+        }, { quoted: mek });
 
     } catch (e) {
         console.log(e);
@@ -47,7 +57,7 @@ cmd({
     }
 });
 
-// Handle reply numbers
+// Handle number reply
 cmd({
     pattern: '^[1-3]$',
     desc: 'Download song after user selection',
@@ -56,7 +66,7 @@ cmd({
 }, async (conn, mek, m, { text, from, reply }) => {
     try {
         const info = userSelections[from];
-        if (!info) return reply('❌ Song selection not found. Use the song command first.');
+        if (!info) return reply('❌ Song selection not found. Please use the song command first.');
 
         const stream = ytdl(info.url, { filter: 'audioonly' });
 
@@ -68,7 +78,6 @@ cmd({
             await conn.sendMessage(from, { audio: stream, mimetype: 'audio/mp4', ptt: true }, { quoted: mek });
         }
 
-        // Clear user selection
         delete userSelections[from];
 
     } catch (e) {
