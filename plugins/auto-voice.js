@@ -1,10 +1,11 @@
 const config = require('../config')
 const { cmd } = require('../command');
-const os = require("os")
-const { runtime } = require('../lib/functions')
 const axios = require('axios')
 
-// Voice commands list (no prefix)
+// Prefix එක (config.prefix එකෙන් ගන්න)
+const prefixes = Array.isArray(config.prefix) ? config.prefix : [config.prefix];
+
+// Voice commands list
 const voiceCommands = [
     { pattern: "hi",       react: "👋🏻", url: "https://files.catbox.moe/zz8y2l.mp3", desc: "Say Hi" },
     { pattern: "mk",       react: "🎙️", url: "https://files.catbox.moe/33ioeq.mp3", desc: "MK Voice" },
@@ -18,8 +19,10 @@ const voiceCommands = [
     { pattern: "gahapan",   react: "👊", url: "https://files.catbox.moe/tz4ydq.mp3", desc: "ගහපන් Voice" },
 ]
 
-// Register all commands (no prefix)
+// Register commands (prefix + no prefix)
 for (let vc of voiceCommands) {
+
+    // 1️⃣ no prefix
     cmd({
         pattern: vc.pattern,
         desc: vc.desc,
@@ -39,4 +42,27 @@ for (let vc of voiceCommands) {
             reply(`❌ Error: ${e}`);
         }
     });
+
+    // 2️⃣ with prefix(es)
+    for (let p of prefixes) {
+        cmd({
+            pattern: p + vc.pattern,
+            desc: vc.desc + " (with prefix)",
+            category: "voice",
+            react: vc.react,
+            filename: __filename
+        },
+        async (conn, mek, m, { from, reply }) => {
+            try {
+                await conn.sendMessage(from, {
+                    audio: { url: vc.url },
+                    mimetype: 'audio/mp4',
+                    ptt: true
+                }, { quoted: mek });
+            } catch (e) {
+                console.log(e);
+                reply(`❌ Error: ${e}`);
+            }
+        });
+    }
 }
