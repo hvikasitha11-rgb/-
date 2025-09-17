@@ -9,37 +9,45 @@ cmd({
   filename: __filename
 }, async (conn, mek, m, { args, reply }) => {
   try {
-    if (!args[0]) return reply("📝 *Please provide a Facebook video link!*");
+    if (!args[0]) 
+      return reply("📝 Please provide a valid Facebook video link!");
 
     const url = args[0];
-    reply("📥 *Fetching Facebook video links...*");
+    reply("📥 Fetching Facebook video links...");
 
-    // Free API
+    // API request
     const api = `https://api-scraper.vercel.app/fb?url=${encodeURIComponent(url)}`;
     const res = await axios.get(api);
 
-    if (!res.data || (!res.data.hd && !res.data.sd)) {
-      return reply("❌ Could not fetch video links!");
-    }
+    const { hd, sd } = res.data || {};
 
-    // Send SD if available
-    if (res.data.sd) {
+    if (!hd && !sd) 
+      return reply("❌ Could not fetch video links!");
+
+    // Send links
+    let links = "📺 *Facebook Video Downloader*\n\n";
+    if (sd) links += `📱 *SD:* ${sd}\n`;
+    if (hd) links += `🎥 *HD:* ${hd}\n`;
+
+    await conn.sendMessage(m.chat, { text: links }, { quoted: mek });
+
+    // Send SD video
+    if (sd) {
       await conn.sendMessage(m.chat, {
-        video: { url: res.data.sd },
-        caption: "✅ *Here is your SD video (📱)*"
+        video: { url: sd },
+        caption: "📱 Here is your *SD video*"
       }, { quoted: mek });
     }
 
-    // Send HD if available
-    if (res.data.hd) {
+    // Send HD video
+    if (hd) {
       await conn.sendMessage(m.chat, {
-        video: { url: res.data.hd },
-        caption: "✅ *Here is your HD video (🎥)*"
+        video: { url: hd },
+        caption: "🎥 Here is your *HD video*"
       }, { quoted: mek });
     }
 
   } catch (e) {
-    console.error(e);
     reply("⚠️ Error downloading Facebook video!");
   }
 });
